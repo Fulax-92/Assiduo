@@ -36,8 +36,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-app}
-      MYSQL_ROOT_PASSWORD: "AssiduoAdmin!"
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-!ChangeMe!}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-!ChangeMe!}
       MYSQL_USER: ${MYSQL_USER:-app}
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
