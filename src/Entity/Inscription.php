@@ -8,9 +8,12 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: InscriptionRepository::class)]
+#[ORM\UniqueConstraint(name: 'uniq_inscription_eleve_classe_debut', columns: ['eleve_id', 'classe_id', 'date_debut'])]
+#[UniqueEntity(fields: ['eleve', 'classe', 'dateDebut'], errorPath: 'eleve', message: 'Cet élève est déjà inscrit dans cette classe à cette date.')]
 class Inscription
 {
     #[ORM\Id]
