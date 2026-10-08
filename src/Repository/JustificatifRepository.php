@@ -2,17 +2,17 @@
 
 namespace App\Repository;
 
-use App\Entity\Classe;
+use App\Entity\Justificatif;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
- * @extends ServiceEntityRepository<Classe>
+ * @extends ServiceEntityRepository<Justificatif>
  */
-class ClasseRepository extends ServiceEntityRepository
+class JustificatifRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
     {
-        parent::__construct($registry, Classe::class);
+        parent::__construct($registry, Justificatif::class);
     }
 }

@@ -7,4 +7,5 @@
 /public/bundles/
 /var/
 /vendor/
+dbml-error.log
 ###< symfony/framework-bundle ###
