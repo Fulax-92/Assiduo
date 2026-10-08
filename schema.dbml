@@ -1,0 +1,335 @@
+Table "affectation_creneau" {
+  "id" int [pk, not null, increment]
+  "type" varchar(30) [not null]
+  "date_debut" date [not null]
+  "date_fin" date
+  "creneau_id" int [not null]
+  "utilisateur_id" int [not null]
+
+  Indexes {
+    creneau_id [type: btree, name: "IDX_3B69A5E07D0729A9"]
+    utilisateur_id [type: btree, name: "IDX_3B69A5E0FB88E14F"]
+    (creneau_id, utilisateur_id, date_debut) [unique, name: "uniq_affectation_creneau_user_debut"]
+  }
+}
+
+Table "annee_scolaire" {
+  "id" int [pk, not null, increment]
+  "libelle" varchar(20) [unique, not null]
+  "date_debut" date [not null]
+  "date_fin" date [not null]
+  "cloturee" tinyint [not null, default: 0]
+  "etablissement_id" int [not null]
+
+  Indexes {
+    etablissement_id [type: btree, name: "IDX_97150C2BFF631228"]
+  }
+}
+
+Table "appel" {
+  "id" int [pk, not null, increment]
+  "date_appel" date [not null]
+  "statut" varchar(30) [not null, default: 'BROUILLON']
+  "ouvert_le" datetime [not null]
+  "valide_le" datetime
+  "verrouille_le" datetime
+  "cree_par_id" int [not null]
+  "valide_par_id" int
+  "creneau_id" int [not null]
+
+  Indexes {
+    valide_par_id [type: btree, name: "IDX_130D3BD6AF12ED9"]
+    creneau_id [type: btree, name: "IDX_130D3BD7D0729A9"]
+    cree_par_id [type: btree, name: "IDX_130D3BDFC29C013"]
+    (date_appel, creneau_id) [unique, name: "uniq_appel_date_creneau"]
+  }
+}
+
+Table "classe" {
+  "id" int [pk, not null, increment]
+  "libelle" varchar(50) [not null]
+  "niveau" varchar(50) [not null]
+  "active" tinyint [not null, default: 1]
+  "etablissement_id" int [not null]
+  "annee_scolaire_id" int [not null]
+
+  Indexes {
+    annee_scolaire_id [type: btree, name: "IDX_8F87BF969331C741"]
+    etablissement_id [type: btree, name: "IDX_8F87BF96FF631228"]
+    (libelle, etablissement_id, annee_scolaire_id) [unique, name: "uniq_classe_libelle_annee"]
+  }
+}
+
+Table "creneau" {
+  "id" int [pk, not null, increment]
+  "jour_semaine" int [not null]
+  "heure_debut" time [not null]
+  "heure_fin" time [not null]
+  "matiere" varchar(255) [not null]
+  "salle" varchar(255) [not null]
+  "date_debut_validite" date [not null]
+  "date_fin_validite" date [not null]
+  "classe_id" int [not null]
+  "annee_scolaire_id" int [not null]
+
+  Indexes {
+    classe_id [type: btree, name: "IDX_F9668B5F8F5EA509"]
+    annee_scolaire_id [type: btree, name: "IDX_F9668B5F9331C741"]
+  }
+}
+
+Table "doctrine_migration_versions" {
+  "version" varchar(191) [pk, not null]
+  "executed_at" datetime
+  "execution_time" int
+}
+
+Table "eleve" {
+  "id" int [pk, not null, increment]
+  "ine" varchar(11) [unique]
+  "nom" varchar(255) [not null]
+  "prenom" varchar(255) [not null]
+  "date_naissance" date [not null]
+  "actif" tinyint [not null, default: 1]
+}
+
+Table "etablissement" {
+  "id" int [pk, not null, increment]
+  "nom" varchar(255) [not null]
+  "code_uai" varchar(20) [unique, not null]
+  "adresse" varchar(255) [not null]
+  "actif" tinyint [not null, default: 1]
+}
+
+Table "fichier_justificatif" {
+  "id" int [pk, not null, increment]
+  "nom_original" varchar(255) [not null]
+  "type_mime" varchar(100) [not null]
+  "taille_octets" int [not null]
+  "url_stockage" varchar(500) [not null]
+  "empreinte_sha256" varchar(64) [unique, not null]
+  "ajoute_le" datetime [not null]
+  "justificatif_id" int [not null]
+
+  Indexes {
+    justificatif_id [type: btree, name: "IDX_D2FB12284B85A991"]
+  }
+}
+
+Table "inscription" {
+  "id" int [pk, not null, increment]
+  "date_debut" date [not null]
+  "date_fin" date
+  "statut" varchar(30) [not null, default: 'ACTIVE']
+  "eleve_id" int [not null]
+  "classe_id" int [not null]
+
+  Indexes {
+    classe_id [type: btree, name: "IDX_5E90F6D68F5EA509"]
+    eleve_id [type: btree, name: "IDX_5E90F6D6A6CC7B2"]
+    (eleve_id, classe_id, date_debut) [unique, name: "uniq_inscription_eleve_classe_debut"]
+  }
+}
+
+Table "journal_audit" {
+  "id" int [pk, not null, increment]
+  "horodate" datetime [not null]
+  "action" varchar(30) [not null]
+  "entite_type" varchar(100) [not null]
+  "entite_id" int [not null]
+  "adresse_ip" varchar(45)
+  "user_agent" varchar(255)
+  "details" longtext
+  "utilisateur_id" int [not null]
+
+  Indexes {
+    utilisateur_id [type: btree, name: "IDX_71C3CC53FB88E14F"]
+    (entite_id, entite_type) [type: btree, name: "idx_audit_entite"]
+    horodate [type: btree, name: "idx_audit_horodate"]
+  }
+}
+
+Table "justificatif" {
+  "id" int [pk, not null, increment]
+  "source" varchar(30) [not null]
+  "statut" varchar(30) [not null, default: 'DEPOSE']
+  "commentaire" longtext
+  "depose_le" datetime [not null]
+  "eleve_id" int [not null]
+
+  Indexes {
+    eleve_id [type: btree, name: "IDX_90D3C5DCA6CC7B2"]
+  }
+}
+
+Table "motif" {
+  "id" int [pk, not null, increment]
+  "code" varchar(50) [unique, not null]
+  "libelle" varchar(100) [not null]
+  "justificatif_requis" tinyint [not null, default: 0]
+  "actif" tinyint [not null, default: 1]
+}
+
+Table "permission" {
+  "id" int [pk, not null, increment]
+  "code" varchar(50) [unique, not null]
+  "libelle" varchar(100) [not null]
+}
+
+Table "presence" {
+  "id" int [pk, not null, increment]
+  "statut" varchar(30) [not null, default: 'PRESENT']
+  "minutes_retard" int [not null, default: 0]
+  "minutes_absence" int [not null, default: 0]
+  "commentaire" longtext
+  "saisi_le" datetime [not null]
+  "appel_id" int [not null]
+  "inscription_id" int [not null]
+
+  Indexes {
+    appel_id [type: btree, name: "IDX_6977C7A5270B0E02"]
+    inscription_id [type: btree, name: "IDX_6977C7A55DAC5993"]
+    (appel_id, inscription_id) [unique, name: "uniq_presence_appel_inscription"]
+  }
+}
+
+Table "role" {
+  "id" int [pk, not null, increment]
+  "code" varchar(50) [unique, not null]
+  "libelle" varchar(100) [not null]
+}
+
+Table "role_permission" {
+  "role_id" int [not null]
+  "permission_id" int [not null]
+
+  Indexes {
+    role_id [type: btree, name: "IDX_6F7DF886D60322AC"]
+    permission_id [type: btree, name: "IDX_6F7DF886FED90CCA"]
+    (role_id, permission_id) [pk, name: "PRIMARY"]
+  }
+}
+
+Table "traitement_absence" {
+  "id" int [pk, not null, increment]
+  "decision" varchar(30) [not null, default: 'EN_ATTENTE']
+  "commentaire" longtext
+  "traite_le" datetime [not null]
+  "est_courant" tinyint [not null, default: 0]
+  "courant_unique" smallint
+  "presence_id" int [not null]
+  "traite_par_id" int [not null]
+  "motif_id" int
+
+  Indexes {
+    traite_par_id [type: btree, name: "IDX_C406E665167FABE8"]
+    motif_id [type: btree, name: "IDX_C406E665D0EEB819"]
+    presence_id [type: btree, name: "IDX_C406E665F328FFC4"]
+    (presence_id, courant_unique) [unique, name: "uniq_traitement_courant_presence"]
+  }
+}
+
+Table "traitement_justificatif" {
+  "traitement_absence_id" int [not null]
+  "justificatif_id" int [not null]
+
+  Indexes {
+    justificatif_id [type: btree, name: "IDX_B33AF3794B85A991"]
+    traitement_absence_id [type: btree, name: "IDX_B33AF379C91A3D60"]
+    (traitement_absence_id, justificatif_id) [pk, name: "PRIMARY"]
+  }
+}
+
+Table "utilisateur" {
+  "id" int [pk, not null, increment]
+  "nom" varchar(255) [not null]
+  "prenom" varchar(255) [not null]
+  "email" varchar(180) [unique, not null]
+  "mot_de_passe_hash" varchar(255) [not null]
+  "actif" tinyint [not null, default: 1]
+  "dernier_acces_le" datetime
+}
+
+Table "utilisateur_etablissement" {
+  "id" int [pk, not null, increment]
+  "date_debut" date [not null]
+  "date_fin" date
+  "utilisateur_id" int [not null]
+  "etablissement_id" int [not null]
+
+  Indexes {
+    utilisateur_id [type: btree, name: "IDX_42008AEFB88E14F"]
+    etablissement_id [type: btree, name: "IDX_42008AEFF631228"]
+    (utilisateur_id, etablissement_id, date_debut) [unique, name: "uniq_user_etab_debut"]
+  }
+}
+
+Table "utilisateur_role" {
+  "id" int [pk, not null, increment]
+  "date_debut" date [not null]
+  "date_fin" date
+  "utilisateur_id" int [not null]
+  "role_id" int [not null]
+
+  Indexes {
+    role_id [type: btree, name: "IDX_9EE8E650D60322AC"]
+    utilisateur_id [type: btree, name: "IDX_9EE8E650FB88E14F"]
+    (utilisateur_id, role_id, date_debut) [unique, name: "uniq_user_role_debut"]
+  }
+}
+
+Ref "FK_3B69A5E07D0729A9":"creneau"."id" <? "affectation_creneau"."creneau_id"
+
+Ref "FK_3B69A5E0FB88E14F":"utilisateur"."id" <? "affectation_creneau"."utilisateur_id"
+
+Ref "FK_97150C2BFF631228":"etablissement"."id" <? "annee_scolaire"."etablissement_id"
+
+Ref "FK_130D3BD7D0729A9":"creneau"."id" <? "appel"."creneau_id"
+
+Ref "FK_130D3BDFC29C013":"utilisateur"."id" <? "appel"."cree_par_id"
+
+Ref "FK_130D3BD6AF12ED9":"utilisateur"."id" ?<? "appel"."valide_par_id"
+
+Ref "FK_8F87BF969331C741":"annee_scolaire"."id" <? "classe"."annee_scolaire_id"
+
+Ref "FK_8F87BF96FF631228":"etablissement"."id" <? "classe"."etablissement_id"
+
+Ref "FK_F9668B5F9331C741":"annee_scolaire"."id" <? "creneau"."annee_scolaire_id"
+
+Ref "FK_F9668B5F8F5EA509":"classe"."id" <? "creneau"."classe_id"
+
+Ref "FK_D2FB12284B85A991":"justificatif"."id" <? "fichier_justificatif"."justificatif_id"
+
+Ref "FK_5E90F6D6A6CC7B2":"eleve"."id" <? "inscription"."eleve_id"
+
+Ref "FK_5E90F6D68F5EA509":"classe"."id" <? "inscription"."classe_id"
+
+Ref "FK_71C3CC53FB88E14F":"utilisateur"."id" <? "journal_audit"."utilisateur_id"
+
+Ref "FK_90D3C5DCA6CC7B2":"eleve"."id" <? "justificatif"."eleve_id"
+
+Ref "FK_6977C7A5270B0E02":"appel"."id" <? "presence"."appel_id"
+
+Ref "FK_6977C7A55DAC5993":"inscription"."id" <? "presence"."inscription_id"
+
+Ref "FK_6F7DF886FED90CCA":"permission"."id" <? "role_permission"."permission_id" [delete: cascade]
+
+Ref "FK_6F7DF886D60322AC":"role"."id" <? "role_permission"."role_id" [delete: cascade]
+
+Ref "FK_C406E665167FABE8":"utilisateur"."id" <? "traitement_absence"."traite_par_id"
+
+Ref "FK_C406E665D0EEB819":"motif"."id" ?<? "traitement_absence"."motif_id"
+
+Ref "FK_C406E665F328FFC4":"presence"."id" <? "traitement_absence"."presence_id"
+
+Ref "FK_B33AF3794B85A991":"justificatif"."id" <? "traitement_justificatif"."justificatif_id" [delete: cascade]
+
+Ref "FK_B33AF379C91A3D60":"traitement_absence"."id" <? "traitement_justificatif"."traitement_absence_id" [delete: cascade]
+
+Ref "FK_42008AEFF631228":"etablissement"."id" <? "utilisateur_etablissement"."etablissement_id"
+
+Ref "FK_42008AEFB88E14F":"utilisateur"."id" <? "utilisateur_etablissement"."utilisateur_id"
+
+Ref "FK_9EE8E650D60322AC":"role"."id" <? "utilisateur_role"."role_id"
+
+Ref "FK_9EE8E650FB88E14F":"utilisateur"."id" <? "utilisateur_role"."utilisateur_id"
