@@ -1,0 +1,292 @@
+- name : Installation de FrenkenPHP, MySQL et symfony
+  hosts: webserver
+  become: true
+  vars_files:
+    - vars.yml
+  vars:
+    app_branch: main
+    install_php85: true
+    app_name: Assiduo
+    app_repo: https://github.com/Fulax-92/Assiduo.git
+    app_dir: "/var/www/{{ app_name }}"
+    app_user: www-data
+    app_db_user: app
+    app_db_name: app
+    mysql_port: 3306
+    mysql_server_version: "8.4"
+
+  tasks:
+    - name: Mise a jour du cache apt
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Mise  a jour des paquets installes
+      ansible.builtin.apt:
+        upgrade: yes
+
+    - name: Créer le dossier des clés APT
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Installation de gnupg
+      ansible.builtin.apt:
+        name:
+          - gnupg
+          - debconf-utils
+        state: present
+
+    - name: Télécharger la clé du dépôt FrankenPHP
+      ansible.builtin.get_url:
+        url: https://pkg.henderkes.com/api/packages/85/debian/repository.key
+        dest: /etc/apt/keyrings/static-php85.asc
+        mode: '0644'
+
+    - name: Ajouter le dépôt PHP ZTS
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/static-php85.asc] https://pkg.henderkes.com/api/packages/85/debian php-zts main"
+        filename: static-php85
+        state: present
+
+    - name: Mettre à jour les dépôts
+      ansible.builtin.apt:
+        name: frankenphp
+        update_cache: yes
+
+    - name: Installer FrankenPHP
+      ansible.builtin.apt:
+        name: frankenphp
+        state: present
+
+    - name: Recuperation des version de php et FrankenPHP
+      ansible.builtin.shell: php --version && frankenphp --version
+      register: versions
+      changed_when: false
+
+    - name: Affichage des version
+      ansible.builtin.debug:
+        var: versions.stdout_lines
+
+    - name: Installation des paquets de base
+      ansible.builtin.apt:
+        name: 
+          - curl
+          - ca-certificates
+          - unzip
+          - git
+          - acl
+          - python3-pymysql
+        state: present
+
+    - name: Installation de composer
+      ansible.builtin.shell: |
+        curl -sS https://getcomposer.org/installer | php
+        mv composer.phar /usr/local/bin/composer
+      args:
+        chdir: /tmp
+        creates: /usr/local/bin/composer
+
+    - name: Téléchargement du paquet de dépôt MySQL
+      ansible.builtin.get_url:
+        url: https://dev.mysql.com/get/mysql-apt-config_0.8.40-1_all.deb
+        dest: /tmp/mysql-apt-config.deb
+        mode: "0644"
+        http_agent: "Wget/1.21"
+
+    - name: Pré-sélection de MySQL 8.4 LTS
+      ansible.builtin.debconf:
+        name: mysql-apt-config
+        question: mysql-apt-config/select-server
+        value: mysql-8.4-lts
+        vtype: select
+
+    - name: Installation du dépôt MySQL
+      ansible.builtin.apt:
+        deb: /tmp/mysql-apt-config.deb
+
+    - name: Mise à jour du cache apt (nouveau dépôt)
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Pré-configuration du mot de passe root MySQL
+      ansible.builtin.shell: |
+        echo "mysql-community-server mysql-community-server/root-pass password {{ mysql_root_password }}" | debconf-set-selections
+        echo "mysql-community-server mysql-community-server/re-root-pass password {{ mysql_root_password }}" | debconf-set-selections
+      changed_when: false
+      no_log: true
+
+    - name: Installation de MySQL Server
+      ansible.builtin.apt:
+        name: mysql-server
+        state: present
+
+    - name: MySQL démarré et activé au boot
+      ansible.builtin.service:
+        name: mysql
+        state: started
+        enabled: true
+
+    - name: Dossier des clés APT
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+      when: install_php85 | bool
+
+    - name: Clé du dépôt Sury (PHP récent)
+      ansible.builtin.get_url:
+        url: https://packages.sury.org/php/apt.gpg
+        dest: /etc/apt/keyrings/sury-php.gpg
+        mode: "0644"
+      when: install_php85 | bool
+
+    - name: Dépôt Sury
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/sury-php.gpg] https://packages.sury.org/php/ {{ ansible_distribution_release }} main"
+        filename: sury-php
+        state: present
+        update_cache: true
+      when: install_php85 | bool
+
+    - name: PHP 8.5 CLI et extensions (dont PDO MySQL pour Doctrine)
+      ansible.builtin.apt:
+        name: [php8.5-cli, php8.5-mysql, php8.5-xml, php8.5-mbstring, php8.5-intl, php8.5-curl, php8.5-zip]
+        state: present
+      when: install_php85 | bool
+
+    - name: La commande php pointe sur 8.5
+      community.general.alternatives:
+        name: php
+        path: /usr/bin/php8.5
+      when: install_php85 | bool
+
+    - name: Création de l'utilisateur app (pour Symfony)
+      ansible.builtin.command:
+        argv:
+          - mysql
+          - -u
+          - root
+          - -e
+          - "CREATE USER IF NOT EXISTS 'app'@'localhost' IDENTIFIED BY '{{ app_db_password }}'; GRANT ALL PRIVILEGES ON app.* TO 'app'@'localhost'; FLUSH PRIVILEGES;"
+      environment:
+        MYSQL_PWD: "{{ mysql_root_password }}"
+      changed_when: false
+      no_log: true
+
+    - name: Création des comptes de l'équipe
+      ansible.builtin.command:
+        argv:
+          - mysql
+          - -u
+          - root
+          - -e
+          - "CREATE USER IF NOT EXISTS '{{ item.name }}'@'%' IDENTIFIED BY '{{ item.password }}'; GRANT {{ item.rights }} ON app.* TO '{{ item.name }}'@'%'; FLUSH PRIVILEGES;"
+      environment:
+        MYSQL_PWD: "{{ mysql_root_password }}"
+      loop: "{{ mysql_team_users }}"    # répète la tâche pour chaque compte
+      changed_when: false
+      no_log: true
+
+    - name: Dossier de l'application (droits à l'utilisateur, comme le chown de la doc)
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+
+    - name: Clone du dépôt dans /var/www
+      ansible.builtin.git:
+        repo: "{{ app_repo }}"
+        dest: "{{ app_dir }}"
+        version: "{{ app_branch }}"
+        update: true
+      become_user: "{{ app_user }}"
+
+    - name: composer install
+      ansible.builtin.command:
+        cmd: composer install --no-interaction
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+      register: composer_result
+      changed_when: "'Nothing to install, update or remove' not in composer_result.stderr"
+
+    - name: Connexion à la base dans .env.local (pas .env, qui est versionné)
+      ansible.builtin.copy:
+        dest: "{{ app_dir }}/.env.local"
+        content: |
+          DATABASE_URL="mysql://{{ app_db_user }}:{{ app_db_password }}@127.0.0.1:{{ mysql_port }}/{{ app_db_name }}?serverVersion={{ mysql_server_version }}&charset=utf8mb4"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0640"
+      no_log: true
+
+    - name: Création de la base
+      ansible.builtin.command:
+        cmd: php bin/console doctrine:database:create --if-not-exists
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+      register: doctrine_create
+      changed_when: "'Created database' in doctrine_create.stdout"
+
+    - name: Migrations (création des tables)
+      ansible.builtin.command:
+        cmd: php bin/console doctrine:migrations:migrate --no-interaction
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+      register: doctrine_migrate
+      changed_when: >
+        'Already at the latest version' not in doctrine_migrate.stdout and
+        'No migrations to execute' not in doctrine_migrate.stdout
+
+    - name: Import des donnes csv
+      ansible.builtin.command:
+        cmd: php bin/console app:import-csv  --no-interaction
+        chdir: "{{ app_dir }}"
+        creates: "{{ app_dir }}/var/.csv_imported"
+      become_user: "{{ app_user }}"
+      register: import_csv
+
+
+    - name: Marqueur d import
+      ansible.builtin.file:
+        path: "{{ app_dir }}/var/.csv_imported"
+        state: touch
+        modification_time: preserve
+        access_time: preserve
+      become_user: "{{ app_user }}"
+      when: import_csv is changed
+
+
+    - name: Caddyfile (root vers le dossier public de l'appli)
+      ansible.builtin.copy:
+        dest: /etc/frankenphp/Caddyfile
+        content: |
+          # The Caddyfile is an easy way to configure FrankenPHP and the Caddy web server.
+          #
+          # https://frankenphp.dev/docs/config
+          # https://caddyserver.com/docs/caddyfile
+          {
+              frankenphp
+          }
+
+          http:// {
+              root {{ app_dir }}/public/
+              encode zstd br gzip
+
+              php_server
+          }
+
+          # As an alternative to editing the above site block, you can add your own site
+          # block files in the Caddyfile.d directory, and they will be included as long
+          # as they use the .caddyfile extension.
+          import Caddyfile.d/*.caddyfile
+      notify: Restart frankenphp
+
+  handlers:
+    - name: Restart frankenphp
+      ansible.builtin.service:
+        name: frankenphp
+        state: restarted

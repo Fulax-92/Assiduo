@@ -1,0 +1,159 @@
+- name : Installation de FrenkenPHP, MySQL et symfony
+  hosts: webserver
+  become: true
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Mise a jour du cache apt
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Mise  a jour des paquets installes
+      ansible.builtin.apt:
+        upgrade: yes
+
+    - name: Créer le dossier des clés APT
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Télécharger la clé du dépôt FrankenPHP
+      ansible.builtin.get_url:
+        url: https://pkg.henderkes.com/api/packages/85/debian/repository.key
+        dest: /etc/apt/keyrings/static-php85.asc
+        mode: '0644'
+
+    - name: Ajouter le dépôt PHP ZTS
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/static-php85.asc] https://pkg.henderkes.com/api/packages/85/debian php-zts main"
+        filename: static-php85
+        state: present
+
+    - name: Mettre à jour les dépôts
+      ansible.builtin.apt:
+        name: frankenphp
+        update_cache: yes
+
+    - name: Installer FrankenPHP
+      ansible.builtin.apt:
+        name: frankenphp
+        state: present
+
+    - name: Recuperation des version de php et FrankenPHP
+      ansible.builtin.shell: php --version && frankenphp --version
+      register: versions
+      changed_when: false
+
+    - name: Affichage des version
+      ansible.builtin.debug:
+        var: versions.stdout_lines
+
+    - name: Installation des paquets de base
+      ansible.builtin.apt:
+        name: 
+          - curl
+          - ca-certificates
+          - unzip
+          - git
+        state: present
+
+    - name: Installation de composer
+      ansible.builtin.shell: |
+        curl -sS https://getcomposer.org/installer | php
+        mv composer.phar /usr/local/bin/composer
+      args:
+        chdir: /tmp
+        creates: /usr/local/bin/composer
+
+    - name: Installation de gnupg
+      ansible.builtin.apt:
+        name:
+          - gnupg
+          - debconf-utils
+        state: present
+
+    - name: Téléchargement du paquet de dépôt MySQL
+      ansible.builtin.get_url:
+        url: https://dev.mysql.com/get/mysql-apt-config_0.8.40-1_all.deb
+        dest: /tmp/mysql-apt-config.deb
+        mode: "0644"
+        http_agent: "Wget/1.21"
+
+    - name: Pré-sélection de MySQL 8.4 LTS
+      ansible.builtin.debconf:
+        name: mysql-apt-config
+        question: mysql-apt-config/select-server
+        value: mysql-8.4-lts
+        vtype: select
+
+    - name: Installation du dépôt MySQL
+      ansible.builtin.apt:
+        deb: /tmp/mysql-apt-config.deb
+
+    - name: Mise à jour du cache apt (nouveau dépôt)
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Pré-configuration du mot de passe root MySQL
+      ansible.builtin.debconf:
+        name: mysql-community-server
+        question: "{{ item }}"
+        value: "{{ mysql_root_password }}"
+        vtype: password
+      loop:
+        - mysql-community-server/root-pass
+        - mysql-community-server/re-root-pass
+      no_log: true
+
+    - name: Installation de MySQL Server
+      ansible.builtin.apt:
+        name: mysql-server
+        state: present
+
+    - name: MySQL démarré et activé au boot
+      ansible.builtin.service:
+        name: mysql
+        state: started
+        enabled: true
+
+    - name: Création de l'utilisateur app (pour Symfony)
+      ansible.builtin.command:
+        argv:
+          - mysql
+          - -u
+          - root
+          - -e
+          - "CREATE USER IF NOT EXISTS 'app'@'localhost' IDENTIFIED BY '{{ app_db_password }}'; GRANT ALL PRIVILEGES ON app.* TO 'app'@'localhost'; FLUSH PRIVILEGES;"
+      environment:
+        MYSQL_PWD: "{{ mysql_root_password }}"
+      changed_when: false
+      no_log: true
+
+    - name: Création des comptes de l'équipe
+      ansible.builtin.command:
+        argv:
+          - mysql
+          - -u
+          - root
+          - -e
+          - "CREATE USER IF NOT EXISTS '{{ item.name }}'@'%' IDENTIFIED BY '{{ item.password }}'; GRANT {{ item.rights }} ON app.* TO '{{ item.name }}'@'%'; FLUSH PRIVILEGES;"
+      environment:
+        MYSQL_PWD: "{{ mysql_root_password }}"
+      loop: "{{ mysql_team_users }}"    # répète la tâche pour chaque compte
+      changed_when: false
+      no_log: true
+
+    - name: Comptes utilisateurs nominatifs
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        shell: /bin/bash
+        groups: sudo
+        append: true
+        create_home: true
+        state: present
+      loop: "{{ team_users }}"
+
+
